@@ -15,7 +15,42 @@ from .base import Tokenizer, get_stats, merge
 
 # the main GPT text split patterns, see
 # https://github.com/openai/tiktoken/blob/main/tiktoken_ext/openai_public.py
+'''
+1. '(?:[sdmt]|ll|ve|re)
+   ?: is non capturing group where matched group can not be referenced later to improve the efficiency of regular expression engine
+   [sdmt] is a character class which will match any character in []
+   | is OR
+   So this will match any s,d,m,t or ll or ve or re
+2.  ?\p{L}+: this will match optional empty space followed by one or more letters
+3.  ?\p{N}+: this will match optional empty space followed by one or more numbers
+4.  ?[^\s\p{L}\p{N}]+: optional empty space followed by characters that are NOT white spaces, or letters or numbers. Basically this will match punctuations
+    \s will match white spaces including
+        Space: ' ' (space character)
+        Tab: '\t' (tab character)
+        Newline: '\n' (line feed)
+        Carriage return: '\r'
+        Form feed: '\f'
+        Vertical tab: '\v'
+5.\s+(?!\S): one or more white spaces but only matched until it is not followed by a non white space character
+   (?!pattern) is negative lookahead which will assert that what follows the current position of the string is NOT matched by pattern
+    It prevents matching whitespace if it is followed immediately by a non-whitespace character.
+6.\s+: this is a fall back, which will match whitespaces
+'''
 GPT2_SPLIT_PATTERN = r"""'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+"""
+'''
+1. '(?i:[sdmt]|ll|ve|re): this is similar to above, and i means case insensitive
+2. [^\r\n\p{L}\p{N}]?+\p{L}+: 
+   a. [^]: negation
+   b. ?+ optional and greedily match. ? will only match one if exists, but ?+ will match as many as possible
+3. \p{N}{1,3}: match numbers defined by unicode, at least one but no more than 3
+4.  ?[^\s\p{L}\p{N}]++[\r\n]*: 
+  a. optional empty space
+  b.followed by non white spaces, or letter or number
+  c. ++ means one or more but doesn't allow backtracking
+  d. zero or more \r or \n
+5. same as above
+6. same as above 
+'''
 GPT4_SPLIT_PATTERN = r"""'(?i:[sdmt]|ll|ve|re)|[^\r\n\p{L}\p{N}]?+\p{L}+|\p{N}{1,3}| ?[^\s\p{L}\p{N}]++[\r\n]*|\s*[\r\n]|\s+(?!\S)|\s+"""
 
 
@@ -62,9 +97,6 @@ class RegexTokenizer(Tokenizer):
             merges[pair] = idx
             vocab[idx] = vocab[pair[0]] + vocab[pair[1]]
             # prints
-            if verbose:
-                print(f"merge {i+1}/{num_merges}: {pair} -> {idx} ({vocab[idx]}) had {stats[pair]} occurrences")
-
         # save class variables
         self.merges = merges # used in encode()
         self.vocab = vocab   # used in decode()
